@@ -19,15 +19,16 @@
 
 var rc = {
   'init_angle': 45,
-  'num_links': 2,
+  'num_links': 4,
   'roof_dist': 3,
   'mass': 1,
   'gravity': 10,
-  'time_step': 0.1,
-  'num_frames': 1,
+  'time_step': 0.05,
+  'num_frames': 200,
   'stability': 0.01,
-  'update_rotation': false,
-  'grid': true,
+  'damping': 0.01,
+  'update_rotation': true,
+  'ground': true,
   'threeD': false,
 };
 
@@ -35,7 +36,7 @@ var container;
 var controls, camera;
 var scene, renderer;
 var width, height;
-var grid;
+var ground;
 var link_mesh;
 
 // Box geometry used to draw the pendulum links
@@ -61,6 +62,7 @@ var angularvel;
 
 var pendulum_length;
 var dx, dy, dz;
+var dmass;
 
 // Main point of entry
 //var is_chrome = /chrom(e|ium)/.test(navigator.userAgent.toLowerCase());
@@ -106,9 +108,10 @@ function initGUI() {
   gui.add(rc, 'gravity', 0, 100).step(0.5).onChange( guiChanged );
   gui.add(rc, 'time_step', 0.001, 0.3).step(0.001).onChange( guiChanged );
   gui.add(rc, 'num_frames', -1, 10000).step(10).onChange( guiChanged );
-  gui.add(rc, 'stability', 0, 1).step(0.01).onChange( guiChanged );
+  gui.add(rc, 'stability', 0, 10).step(0.01).onChange( guiChanged );
+  gui.add(rc, 'damping', 0, 1).step(0.01).onChange( guiChanged );
   gui.add(rc, 'update_rotation').onChange( guiChanged );
-  gui.add(rc, 'grid').onChange( guiChanged );
+  gui.add(rc, 'ground').onChange( guiChanged );
   gui.add(rc, 'threeD').onChange( guiChanged );
 };
 
@@ -122,11 +125,12 @@ function init() {
   dx = 0.2;
   dy = pendulum_length/rc.num_links;
   dz = 0.2;
+  dmass = rc.mass/rc.num_links;
   reset_resolution();
   box_geometry = new THREE.BoxGeometry( dx, pendulum_length, dz );
-  var inertiax = (rc.mass/12)*(dz*dz + dy*dy);
-  var inertiay = (rc.mass/12)*(dx*dx + dz*dz);
-  var inertiaz = (rc.mass/12)*(dx*dx + dy*dy);
+  var inertiax = (dmass/12)*(dz*dz + dy*dy);
+  var inertiay = (dmass/12)*(dx*dx + dz*dz);
+  var inertiaz = (dmass/12)*(dx*dx + dy*dy);
 
   inertia = math.matrix([[inertiax, 0, 0], [0, inertiay, 0], [0, 0, inertiaz]]);
 
@@ -150,7 +154,7 @@ function init() {
 
   document.addEventListener("keydown", onDocumentKeyDown, false);
 
-  grid = new THREE.GridHelper(10,20);
+  ground = new THREE.GridHelper(10,20);
   bar_max_height = 0.4;
 
   reset_window();
@@ -160,7 +164,6 @@ function reset_camera() {
   var near = 0.1, far = 1000;
   if (rc.threeD) {
     camera = new THREE.PerspectiveCamera( 50, width/height, near, far );
-    camera.position.y = 8;
 
     controls = new THREE.OrbitControls( camera, renderer.domElement );
     controls.addEventListener( 'change', render );
@@ -207,11 +210,9 @@ function reset_sim() {
     var prev_p = math.subtract(p, math.matrix(r.toArray()));
 
     link_mesh[i].position.set(p[0], p[1], p[2])
-    //link_mesh[i].position.set((i+0.5)*dy*math.sin(theta),rc.roof_dist - dy*(i + 0.5)*(math.cos(theta)),0);
     velocity[i] = math.zeros(3);
     angularvel[i] = math.zeros(3);
     link_mesh[i].setRotationFromQuaternion(rotation[i]);
-    //theta += 10*Math.PI/180;
   }
 
   max_hieght = rc.roof_dist - dy*0.5*(math.cos(theta));
@@ -246,20 +247,14 @@ function reset_geometry() {
     rotation[i] = new THREE.Quaternion();
     scene.add(link_mesh[i]);
   }
-  if (rc.grid) {
-    scene.add(grid);
+  if (rc.ground) {
+    scene.add(ground);
   }
   scene.add(camera);
   reset_sim();
 }
 
 function reset() {
-  dy = pendulum_length/rc.num_links;
-  var inertiax = (rc.mass/12)*(dz*dz + dy*dy);
-  var inertiay = (rc.mass/12)*(dx*dx + dz*dz);
-  var inertiaz = (rc.mass/12)*(dx*dx + dy*dy);
-
-  inertia = math.matrix([[inertiax, 0, 0], [0, inertiay, 0], [0, 0, inertiaz]]);
   reset_window();
   reset_camera();
   reset_geometry();
@@ -269,6 +264,14 @@ function reset() {
 function animate() {
   // update gui if changed
   if ( gui_changed ) {
+    // update parameters
+    dy = pendulum_length/rc.num_links;
+    dmass = rc.mass/rc.num_links;
+    var inertiax = (dmass/12)*(dz*dz + dy*dy);
+    var inertiay = (dmass/12)*(dx*dx + dz*dz);
+    var inertiaz = (dmass/12)*(dx*dx + dy*dy);
+
+    inertia = math.matrix([[inertiax, 0, 0], [0, inertiay, 0], [0, 0, inertiaz]]);
     reset();
     gui_changed = false;
   }
@@ -303,7 +306,7 @@ function update() {
   var dt = rc.time_step;
   var eye = math.eye(3);
   var neg_eye = math.multiply(math.eye(3), -1);
-  var m = rc.mass;
+  var m = dmass;
   var M = math.matrix(math.multiply(m, eye.clone()));
 
   var I = inertia;
@@ -335,8 +338,10 @@ function update() {
     var stab_coeff = rc.stability;
 
     b.subset(math.index([off+0,off+1,off+2],0), math.multiply(M, math.matrix([0,-rc.gravity,0])));
+
     var w = angularvel[i].clone();
-    b.subset(math.index([off+3,off+4,off+5],0), math.cross(math.multiply(I,w), w));
+    var friction = math.multiply(rc.damping, w)
+    b.subset(math.index([off+3,off+4,off+5],0), math.subtract(math.cross(math.multiply(I,w), w), friction));
 
     var porig_r = math.matrix([0,rc.roof_dist,0]);
     var vorig_r = math.matrix([0,0,0]);
@@ -357,17 +362,14 @@ function update() {
     var rhs = math.add(math.subtract(math.cross(w, v_r), rhs_prev), math.add(stab_v,stab_p));
 
     b.subset(math.index([off+6,off+7,off+8],0), rhs);
-    //var w_arr = w.toArray();
-    //var rr = r.toArray();
-    //var ww = w_arr[2]*w_arr[2];
-    //var veri_rhs = [-ww*rr[0],-ww*rr[1]];
-    //console.log(rhs.toArray() + " vs " + veri_rhs);
   }
 
   // compute
   var x = math.lusolve(A,b);
 
   // update
+  var Ep = 0;
+  var Ek = 0;
   for (var i = 0; i < rc.num_links; ++i) {
     var off = i*9;
     var accel = math.reshape(math.subset(x, math.index([off+0,off+1,off+2], 0)), [3]);
@@ -395,6 +397,7 @@ function update() {
     }
 
     // update position
+    var r = get_r(i);
     var p;
     if (rc.update_rotation) {
       var porig_r = math.matrix([0,rc.roof_dist,0]);
@@ -402,7 +405,6 @@ function update() {
         var r_prev = get_r(i-1);
         porig_r = math.subtract(math.matrix(link_mesh[i-1].position.toArray()), r_prev);
       }
-      var r = get_r(i);
       p = math.subtract(porig_r,r).toArray();
     } else {
       var p_prev = math.matrix(link_mesh[i].position.toArray());
@@ -410,18 +412,17 @@ function update() {
     }
     link_mesh[i].position.set(p[0], p[1], p[2]);
 
-    // update energy bars
+    // update energy
     var w_arr = w.toArray();
-    var vel2 = math.dot(velocity[i], velocity[i]);
+    var vel2 = math.dot(v, v);
     var Ia = I.toArray();
-    var rthree = new THREE.Vector3(0, dy/2, 0);
-    rthree.applyQuaternion(rotation[i]);
-    var Ep = rc.mass*rc.gravity*(dy/2-rthree.toArray()[1]);
+    Ep += m*rc.gravity*(-rc.roof_dist + pendulum_length/2 + p[1]);
     var rotEk = 0.5*(Ia[0][0]*w_arr[0]*w_arr[0] + Ia[1][1]*w_arr[1]*w_arr[1] + Ia[2][2]*w_arr[2]*w_arr[2]);
-    var Ek = 0.5*rc.mass*vel2 + rotEk;
-    set_energy_heights(Ep, Ek);
-
+    Ek += 0.5*m*vel2 + rotEk;
   }
+  // update energy bars
+  set_energy_heights(Ep, Ek);
+
 }
 
 function set_energy_heights(Ep, Ek) {
