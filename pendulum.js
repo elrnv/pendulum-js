@@ -445,7 +445,7 @@ function update() {
     var w_arr = w.toArray();
     var vel2 = math.dot(v, v);
     var Ia = I.toArray();
-    Ep += m*rc.gravity*(-rc.roof_dist + pendulum_length/2 + p[1]);
+    Ep += m*rc.gravity*(Math.min(pendulum_length/2 - rc.roof_dist, 0) + p[1]);
     var rotEk = 0.5*(Ia[0][0]*w_arr[0]*w_arr[0] + Ia[1][1]*w_arr[1]*w_arr[1] + Ia[2][2]*w_arr[2]*w_arr[2]);
     Ek += 0.5*m*vel2 + rotEk;
   }

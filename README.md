@@ -2,6 +2,10 @@
 
 A simple multi-link pendulum simulator.
 
+A green pendulum affected by gravity and constraint forces, swings back and
+forth. A stacked bar graph on the left indicates the total amount of kinetic
+energy (in red) and potential energy (in blue) of the pendulum.
+
 ## Optional Controls:
 
 The simulation has a number of options:
@@ -20,3 +24,5 @@ The simulation has a number of options:
 - `update_position`: When checked, the simulation updates the position of the center of mass of each link using forward explicit Euler integration. When unchecked, the center of mass position is determined from the rotation, which is updated using explicit Euler integration.
 - `grid`: Display the grid indicating where the ground plane lies.
 - `threeD`: Enable 3D view. The same simulation runs, but the view changes to 3D and the pendulum is rotated to demonstrate full 3D motion.
+
+You may also press the "r" key to reset the simulation.
