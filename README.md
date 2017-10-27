@@ -1,6 +1,6 @@
 # A simple pendulum simulation
 
-A simple multi-link pendulum simulator.  (Demo)[https:/elrnv.github.io/pendulum-js]
+A simple multi-link pendulum simulator.  [Demo](https:/elrnv.github.io/pendulum-js)
 
 A green pendulum affected by gravity and constraint forces, swings back and
 forth. A stacked bar graph on the left indicates the total amount of kinetic
